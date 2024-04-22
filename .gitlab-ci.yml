@@ -1,0 +1,40 @@
+# Pipeline de Deploy Automatizado para Kubernetes no GCP
+
+stages:
+  - development
+  - production
+
+variables:
+  PROJECT_ID: "seu-projeto-id"
+  GCP_KEY_FILE: "gcp-key.json"
+  GCP_REGISTRY: "gcr.io/$PROJECT_ID"
+  IMAGE_NAME: "sua-aplicacao"
+  KUBE_NAMESPACE: "default"
+  KUBE_CLUSTER: "seu-cluster"
+  KUBE_REGION: "regiao-do-cluster"
+
+before_script:
+  - echo $GCP_KEY_FILE | base64 -d > gcp-key.json
+  - gcloud auth activate-service-account --key-file=gcp-key.json
+  - gcloud config set project $PROJECT_ID
+  - gcloud container clusters get-credentials $KUBE_CLUSTER --region $KUBE_REGION
+
+development:
+  stage: development
+  script:
+    - echo "Building Development Docker Image..."
+    - docker build -t $IMAGE_NAME:dev .
+    - echo "Pushing Development Docker Image to GCP Registry..."
+    - docker tag $IMAGE_NAME:dev $GCP_REGISTRY/$IMAGE_NAME:dev
+    - docker push $GCP_REGISTRY/$IMAGE_NAME:dev
+
+production:
+  stage: production
+  script:
+    - echo "Building Production Docker Image..."
+    - docker build -t $IMAGE_NAME:latest .
+    - echo "Pushing Production Docker Image to GCP Registry..."
+    - docker tag $IMAGE_NAME:latest $GCP_REGISTRY/$IMAGE_NAME:latest
+    - docker push $GCP_REGISTRY/$IMAGE_NAME:latest
+    - echo "Updating Production Deployment..."
+    - kubectl set image deployment/$IMAGE_NAME $IMAGE_NAME=$GCP_REGISTRY/$IMAGE_NAME:latest -n $KUBE_NAMESPACE
